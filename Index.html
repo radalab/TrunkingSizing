@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trunking Sizing App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding-top: 20px; padding-bottom: 20px; }
+        .result-box { border: 1px solid #ddd; padding: 10px; margin-top: 20px; }
+        .trunking-section { border: 1px solid #007bff; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        
+        @media print {
+            .no-print, 
+            button,
+            .trunking-section button,
+            th:last-child, 
+            td:last-child,
+            #howItWorks {
+                display: none !important;
+            }
+            .trunking-section { break-inside: avoid; }
+            body { padding-top: 0; }
+            .container { width: 100%; max-width: none; }
+            input, select { 
+                border: none; 
+                -webkit-appearance: none; 
+                -moz-appearance: none; 
+                appearance: none; 
+            }
+            .form-control, .form-select { font-weight: bold; }
+            .card { border: none; }
+            .card-header { background-color: transparent; border-bottom: 1px solid #000; }
+            .table { border-collapse: collapse; }
+            .table th, .table td { border: 1px solid #000; }
+            .result-box { border: none; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Trunking Sizing</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Project Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="projectName">Project Name:</label>
+                        <input type="text" id="projectName" class="form-control" placeholder="Project Name">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="projectDate">Date:</label>
+                        <input type="date" id="projectDate" class="form-control">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="spareCapacity">Spare Capacity (%):</label>
+                        <input type="number" id="spareCapacity" class="form-control" value="30" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="trunkingSections"></div>
+
+        <button onclick="addTrunkingSection()" class="btn btn-primary mt-3 no-print">Add Trunking</button>
+
+        <div id="howItWorks" class="card mt-5">
+            <div class="card-header">
+                <h5>How It Works</h5>
+            </div>
+            <div class="card-body">
+                <h6>Calculation Process:</h6>
+                <ol>
+                    <li><strong>Cable Factor:</strong> Here predefined cable factor for Thermosetting BS7211 stranded are used as per Table E5 IET onsite guide.</li>
+                    <li><strong>Total Factor per Cable:</strong> The app multiplies the cable factor by the quantity of each cable size.</li>
+                    <li><strong>Sum of Factors:</strong> All individual cable factors are summed to get the total cable factor.</li>
+                    <li><strong>Spare Capacity:</strong> The specified spare capacity percentage is applied to the total factor.</li>
+                    <li><strong>Trunking Size Selection:</strong> The app compares the total factor (including spare capacity) with standard trunking size factors to recommend the appropriate size.</li>
+                </ol>
+                
+                <h6>Standard Trunking Sizes:</h6>
+                <p>50x50, 75x50, 75x75, 100x50, 100x75, 100x100, 150x50, 150x75, 150x100, 150x150, 225x100, 225x150, 225x225, 300x75, 300x100, 300x150, 300x300 mm</p>
+
+                <p><strong>Note:</strong> The app provides recommendations based on calculations. Always consult with a qualified professional for final decisions on electrical installations.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const cableFactors = {
+        "1.5": 9.6,
+        "2.5": 13.9,
+        "4": 18.1,
+        "6": 22.9,
+        "10": 36.3,
+        "16": 50.3,
+        "25": 75.4
+    };
+
+    const trunkingSizes = [
+        { dimensions: "50 x 50", factor: 1037 },
+        { dimensions: "75 x 50", factor: 1555 },
+        { dimensions: "75 x 75", factor: 2371 },
+        { dimensions: "100 x 50", factor: 2091 },
+        { dimensions: "100 x 75", factor: 3189 },
+        { dimensions: "100 x 100", factor: 4252 },
+        { dimensions: "150 x 50", factor: 3091 },
+        { dimensions: "150 x 75", factor: 4743 },
+        { dimensions: "150 x 100", factor: 6394 },
+        { dimensions: "150 x 150", factor: 9697 },
+        { dimensions: "225 x 100", factor: 9662 },
+        { dimensions: "225 x 150", factor: 14652 },
+        { dimensions: "225 x 225", factor: 22138 },
+        { dimensions: "300 x 75", factor: 9590 },
+        { dimensions: "300 x 100", factor: 12929 },
+        { dimensions: "300 x 150", factor: 19607 },
+        { dimensions: "300 x 300", factor: 39428 }
+    ];
+
+    function setCurrentDate() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('projectDate').value = today;
+    }
+
+    function addTrunkingSection() {
+        const trunkingSections = document.getElementById('trunkingSections');
+        const sectionIndex = trunkingSections.children.length + 1;
+        
+        const section = document.createElement('div');
+        section.className = 'trunking-section';
+        section.innerHTML = `
+            <h4>Trunking Section ${sectionIndex}</h4>
+            <div class="mb-3">
+                <label for="trunkingRef${sectionIndex}">Trunking Reference:</label>
+                <input type="text" id="trunkingRef${sectionIndex}" class="form-control" placeholder="Trunking Reference">
+            </div>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>S/N</th>
+                        <th>Cable CSA (mm²)</th>
+                        <th>Factor</th>
+                        <th>Quantity</th>
+                        <th>Total Factor</th>
+                        <th class="no-print">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <button onclick="addCable(${sectionIndex})" class="btn btn-secondary no-print">Add Cable</button>
+            <button onclick="calculateTrunking(${sectionIndex})" class="btn btn-success no-print">Calculate</button>
+            <div class="result-box mt-3"></div>
+        `;
+        
+        trunkingSections.appendChild(section);
+        addCable(sectionIndex);
+    }
+
+    function addCable(sectionIndex) {
+        const tbody = document.querySelector(`#trunkingSections > div:nth-child(${sectionIndex}) tbody`);
+        const row = tbody.insertRow();
+        
+        // Serial Number
+        const cellSN = row.insertCell();
+        cellSN.textContent = tbody.rows.length;
+
+        // Cable CSA
+        const cellCSA = row.insertCell();
+        const selectCSA = document.createElement('select');
+        selectCSA.className = 'form-select';
+        selectCSA.innerHTML = '<option value="" selected disabled>Select CSA</option>';
+        for (const csa in cableFactors) {
+            const option = document.createElement('option');
+            option.value = option.textContent = csa;
+            selectCSA.appendChild(option);
+        }
+        selectCSA.onchange = () => updateFactor(row);
+        cellCSA.appendChild(selectCSA);
+
+        // Factor
+        const cellFactor = row.insertCell();
+        cellFactor.className = 'text-center';
+
+        // Quantity
+        const cellQuantity = row.insertCell();
+        const inputQuantity = document.createElement('input');
+        inputQuantity.type = 'number';
+        inputQuantity.className = 'form-control';
+        inputQuantity.min = 1;
+        inputQuantity.value = 1;
+        inputQuantity.onchange = () => updateFactor(row);
+        cellQuantity.appendChild(inputQuantity);
+
+        // Total Factor
+        const cellTotalFactor = row.insertCell();
+        cellTotalFactor.className = 'text-center';
+
+        // Remove button
+        const cellRemove = row.insertCell();
+        cellRemove.className = 'no-print';
+        const btnRemove = document.createElement('button');
+        btnRemove.className = 'btn btn-danger btn-sm';
+        btnRemove.textContent = 'Remove';
+        btnRemove.onclick = () => {
+            row.remove();
+            updateSerialNumbers(tbody);
+        };
+        cellRemove.appendChild(btnRemove);
+
+        updateFactor(row);
+    }
+
+    function updateSerialNumbers(tbody) {
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((row, index) => {
+            row.cells[0].textContent = index + 1;
+        });
+    }
+
+    function updateFactor(row) {
+        const csa = row.cells[1].firstChild.value;
+        const quantity = parseInt(row.cells[3].firstChild.value) || 0;
+        const factor = cableFactors[csa] || 0;
+        row.cells[2].textContent = factor.toFixed(1);
+        row.cells[4].textContent = (factor * quantity).toFixed(1);
+    }
+
+    function calculateTrunking(sectionIndex) {
+        const section = document.querySelector(`#trunkingSections > div:nth-child(${sectionIndex})`);
+        const rows = section.querySelectorAll('tbody tr');
+        let totalFactor = 0;
+
+        rows.forEach(row => {
+            totalFactor += parseFloat(row.cells[4].textContent) || 0;
+        });
+
+        const spareCapacity = parseFloat(document.getElementById('spareCapacity').value) / 100;
+        const totalFactorWithSpare = totalFactor * (1 + spareCapacity);
+
+        let recommendedSize = trunkingSizes[trunkingSizes.length - 1];
+        for (const size of trunkingSizes) {
+            if (size.factor >= totalFactorWithSpare) {
+                recommendedSize = size;
+                break;
+            }
+        }
+
+        const resultsDiv = section.querySelector('.result-box');
+        resultsDiv.innerHTML = `
+            <h5>Results for Trunking Section ${sectionIndex}:</h5>
+            <p>Total cable factor: ${totalFactor.toFixed(1)}</p>
+            <p>Total factor with spare capacity: ${totalFactorWithSpare.toFixed(1)}</p>
+            <p>Recommended trunking size: ${recommendedSize.dimensions} mm (Factor: ${recommendedSize.factor})</p>
+        `;
+    }
+
+    // Initialize
+    setCurrentDate();
+    addTrunkingSection();
+    </script>
+</body>
+</html>
